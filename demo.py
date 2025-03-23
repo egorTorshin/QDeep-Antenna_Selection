@@ -33,7 +33,6 @@ except ImportError:
 
 def distance(lat1, long1, lat2, long2):
     """Compute the distance (in miles) between two latitude/longitude points."""
-    # Преобразуем градусы в радианы
     long1 = radians(long1)
     long2 = radians(long2)
     lat1 = radians(lat1)
@@ -42,7 +41,7 @@ def distance(lat1, long1, lat2, long2):
     dlat = lat2 - lat1
     a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlong / 2) ** 2
     c = 2 * asin(sqrt(a))
-    r = 3956  # радиус Земли в милях
+    r = 3956 
     return c * r
 
 
@@ -80,22 +79,8 @@ def gen_new_points(num_new_points, region_map):
 
 
 def build_bqm(num_to_build, existing_towers, new_locs, radius, lambda_constraint):
-    """
-    Строит BQM для задачи размещения новых вышек.
-
-    Аргументы:
-      num_to_build: int, сколько новых вышек нужно построить.
-      existing_towers: DataFrame с координатами существующих вышек.
-      new_locs: список [lat, long] потенциальных мест для строительства.
-      radius: ограничивающий радиус для интерференции.
-      lambda_constraint: штрафной коэффициент для ограничения выбора ровно num_to_build.
-
-    Возвращает:
-      bqm: объект BinaryQuadraticModel, описывающий задачу.
-    """
     n = len(new_locs)
 
-    # Собираем все точки (существующие и новые) для вычисления максимального расстояния²
     all_points = []
     for _, row in existing_towers.iterrows():
         all_points.append((row['Latitude'], row['Longitude']))
@@ -107,33 +92,24 @@ def build_bqm(num_to_build, existing_towers, new_locs, radius, lambda_constraint
         if d2 > max_dist:
             max_dist = d2
 
-    # Инициализируем BQM
     bqm = dimod.BinaryQuadraticModel({}, {}, 0.0, dimod.BINARY)
 
-    # Для переменных кандидатов будем использовать имена "x0", "x1", ..., "x{n-1}"
-    # Вклад от интерференции между кандидатами:
     for i in range(n):
         for j in range(i + 1, n):
             d2 = distance(new_locs[i][0], new_locs[i][1], new_locs[j][0], new_locs[j][1]) ** 2
             bias = d2 if d2 < radius ** 2 else max_dist
-            # Термин: -bias * x_i * x_j, плюс штрафное взаимодействие от ограничения
             coeff = -bias + 2 * lambda_constraint
             bqm.add_interaction(f"x{i}", f"x{j}", coeff)
 
-    # Для взаимодействия между существующими вышками и кандидатами.
-    # Поскольку существующие вышки зафиксированы (их значение = 1), вклад равен сумме -bias для каждой пары.
     for i in range(n):
         lin_term = 0
         for _, row in existing_towers.iterrows():
             d2 = distance(row['Latitude'], row['Longitude'], new_locs[i][0], new_locs[i][1]) ** 2
             bias = d2 if d2 < radius ** 2 else max_dist
             lin_term += -bias
-        # Добавляем линейный штраф от ограничения: lambda*(1 - 2*num_to_build)
         lin_term += lambda_constraint * (1 - 2 * num_to_build)
-        # Если переменная уже есть, прибавляем, иначе задаём значение
         bqm.add_variable(f"x{i}", lin_term)
 
-    # Добавляем константу из ограничения (не влияет на оптимизацию)
     bqm.offset += lambda_constraint * (num_to_build ** 2)
 
     return bqm
@@ -180,21 +156,17 @@ if __name__ == "__main__":
     num_to_build = 10
 
     print("\nBuilding BQM for new tower placement...")
-    # Подбираем λ достаточно большим (значение можно корректировать)
     lambda_constraint = 10000
-    # Здесь radius интерпретируется как порог (радиус² сравнивается с квадратом расстояния)
     bqm = build_bqm(num_to_build, existing_towers, new_locs, radius=75, lambda_constraint=lambda_constraint)
 
     print("\nSubmitting BQM to solver using SimulatedAnnealingSampler...")
     sampler = SimulatedAnnealingSampler()
     sampleset = sampler.sample(bqm, num_reads=1000, label='Example - TV Towers BQM')
 
-    # Извлекаем лучшее решение: переменные с именами "x0", "x1", ... равные 1
     best_sample = sampleset.first.sample
     build_sites = []
     for key, val in best_sample.items():
         if val == 1:
-            # Извлекаем индекс кандидата из имени переменной, например "x3" -> 3
             idx = int(key[1:])
             build_sites.append(new_locs[idx])
 
