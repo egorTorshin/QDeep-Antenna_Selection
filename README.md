@@ -7,9 +7,6 @@
 
 # Antennas Selection
 
-This code was taken from the webinar, *Quantum Programming with the Ocean Tools
-Suite* [[2]](#2).
-
 The graph below represents antenna coverage. Each of the seven nodes below
 represents an antenna with some amount of coverage. Note that the coverage
 provided by each antenna is identical. The edges between each node represent
@@ -27,7 +24,7 @@ Solution: One possible solution is indicated by the red nodes below.
 This problem is an example of an optimization problem known as the maximum
 independent set problem.  Our objective is to maximize the number of nodes in a
 set, with the constraint that no edges be contained in the set.  To solve on a
-D-Wave system, we can reformulate this problem as a quadratic unconstrained
+QDeep system, we can reformulate this problem as a quadratic unconstrained
 binary optimization problem (QUBO).  There are a wide variety of applications
 for this problem, such as scheduling and error correcting codes (as shown in
 [[1]](#1)).
@@ -48,23 +45,6 @@ different color can be found in the file `antenna_plot_solution.png`.
 
 To run the program on a different problem, modify graph G to represent a
 different antenna network.
-
-## Code Overview
-
-The program `antennas.py` creates a graph using the Python package `networkx`,
-and then uses the Ocean software tools to run the `maximum_independent_set`
-function from within the `dwave_networkx` package.
-
-## Real-World Scenario
-
-Germany is well-known for their iconic television towers. Given the locations
-of existing television towers, where should new ones be built to minimize
-interference? Using the LeapHybridCQMSampler we can solve this problem,
-formulated as a constrained quadratic model (CQM) in the following way. Rather
-than formulating this problem as an independent set problem where no
-interference is tolerated, we will optimize to find the minimum amount of
-interference since it's unlikely that in the real-world we will be able to
-eliminate it entirely.
 
 ### CQM Formulation
 
