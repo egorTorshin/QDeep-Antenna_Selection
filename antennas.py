@@ -1,63 +1,61 @@
-# Copyright 2019 D-Wave Systems Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Import networkx for graph tools
 import networkx as nx
-
-# Import dwave_networkx for d-wave graph tools/functions
-import dwave_networkx as dnx
-
-# Import matplotlib.pyplot to draw graphs on screen
-import matplotlib
-matplotlib.use("agg")
 import matplotlib.pyplot as plt
+import numpy as np
+import dimod
+from qdeepsdk import QDeepHybridSolver
 
-# Set the solver we're going to use
-from neal import SimulatedAnnealingSampler
-
-sampler = SimulatedAnnealingSampler()
-
-# Create empty graph
+# Create the graph
 G = nx.Graph()
-
-# Add edges to graph - this also adds the nodes
 G.add_edges_from([(1, 2), (1, 3), (2, 3), (3, 4), (3, 5), (4, 5), (4, 6), (5, 6), (6, 7)])
 
-# Find the maximum independent set, S
-S = dnx.maximum_independent_set(G, sampler=sampler, num_reads=10, label='Example - Antenna Selection')
+# Maximum Independent Set (MIS) QUBO formulation:
+# For each node i, assign binary variable x_i = 1 if node i is in the independent set.
+# Objective: maximize sum_i x_i subject to x_i + x_j <= 1 for each edge (i, j)
+# This can be formulated as minimizing:
+#    Q(x) = - sum_i x_i + A * sum_{(i,j) in E} x_i * x_j
+# where A is a penalty constant (set A = 2 here).
 
-# Print the solution for the user
-print('Maximum independent set size found is', len(S))
-print(S)
+A = 2
 
-# Visualize the results
-k = G.subgraph(S)
-notS = list(set(G.nodes()) - set(S))
-othersubgraph = G.subgraph(notS)
+# Build the QUBO dictionary
+Q = {}
+nodes = list(G.nodes())
+for i in nodes:
+    # Linear term for each node: coefficient -1
+    Q[(i, i)] = -1
+
+for i, j in G.edges():
+    # For each edge, add the penalty term A * x_i * x_j
+    Q[(i, j)] = Q.get((i, j), 0) + A
+
+# Map node labels to indices (0 to n-1) because our solver expects a matrix index
+mapping = {node: idx for idx, node in enumerate(nodes)}
+n = len(nodes)
+matrix = np.zeros((n, n))
+for (i, j), coeff in Q.items():
+    idx_i = mapping[i]
+    idx_j = mapping[j]
+    matrix[idx_i, idx_j] = coeff
+
+# Initialize the QDeepHybridSolver
+solver = QDeepHybridSolver()
+solver.token = "your-auth-token-here"  # Replace with your actual token
+
+# Solve the QUBO by passing the NumPy matrix to the solver
+result = solver.solve(matrix)
+sample = result.get('sample')
+
+# Convert the sample (with keys 0,..., n-1) back to the original node labels
+independent_set = [nodes[i] for i in range(n) if sample.get(i, 0) == 1]
+
+print("Maximum independent set found (MIS) has size", len(independent_set))
+print("MIS:", independent_set)
+
+# Visualize the graph with the independent set highlighted
 pos = nx.spring_layout(G)
 plt.figure()
-
-# Save original problem graph
-original_name = "antenna_plot_original.png"
-nx.draw_networkx(G, pos=pos, with_labels=True)
-plt.savefig(original_name, bbox_inches='tight')
-
-# Save solution graph
-# Note: red nodes are in the set, blue nodes are not
-solution_name = "antenna_plot_solution.png"
-nx.draw_networkx(k, pos=pos, with_labels=True, node_color='r', font_color='k')
-nx.draw_networkx(othersubgraph, pos=pos, with_labels=True, node_color='b', font_color='w')
-plt.savefig(solution_name, bbox_inches='tight')
-
-print("Your plots are saved to {} and {}".format(original_name, solution_name))
+node_colors = ['red' if node in independent_set else 'blue' for node in G.nodes()]
+nx.draw_networkx(G, pos=pos, with_labels=True, node_color=node_colors)
+plt.title("Maximum Independent Set")
+plt.savefig("mis.png")
+print("Plot saved as mis.png")
