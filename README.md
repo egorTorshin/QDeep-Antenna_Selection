@@ -5,6 +5,9 @@
   https://circleci.com/gh/dwave-examples/antenna-selection.svg?style=shield)](
   https://circleci.com/gh/dwave-examples/antenna-selection)
 
+# Important note
+This repository is a fork of D-Wave's original antenna-selection. The contributors to this fork do not claim ownership or authorship of the original codebase. All credit for the original work belongs to D-Wave Systems and its respective contributors.
+
 # Antennas Selection
 
 The graph below represents antenna coverage. Each of the seven nodes below
